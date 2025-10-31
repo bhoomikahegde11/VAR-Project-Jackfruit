@@ -26,9 +26,10 @@ controls.enableRotate = false;
 controls.enablePan = false;
 controls.enableZoom = true;
 
+const cameraSpeed = 0.5;
+const rotationSpeed = 0.02;
 const keys = {};
 let cameraAngle = 0;
-const rotationSpeed = 0.02;
 
 window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
@@ -37,7 +38,7 @@ function updateCamera() {
   if (keys['arrowleft']) cameraAngle -= rotationSpeed;
   if (keys['arrowright']) cameraAngle += rotationSpeed;
 
-  const radius = 25;
+  const radius = camera.position.length();
   camera.position.x = Math.sin(cameraAngle) * radius;
   camera.position.z = Math.cos(cameraAngle) * radius;
   camera.lookAt(0, 0, 0);
@@ -46,26 +47,36 @@ function updateCamera() {
 // ====================================================================
 // CLOTH SETUP
 // ====================================================================
-const textureLoader = new THREE.TextureLoader();
-const clothTexture = textureLoader.load('./fabric.jpg'); // Make sure you have an image file named fabric.jpg
-clothTexture.wrapS = THREE.RepeatWrapping;
-clothTexture.wrapT = THREE.RepeatWrapping;
-
 const clothWidth = 20, clothHeight = 15, segments = 30;
 const clothGeometry = new THREE.PlaneGeometry(clothWidth, clothHeight, segments, segments);
 
-const clothMaterial = new THREE.MeshPhongMaterial({
+// Load texture
+const textureLoader = new THREE.TextureLoader();
+const clothTexture = textureLoader.load('./cloth_texture.jpg'); // place your image file in same folder
+
+// Two materials: wireframe & textured
+const wireMaterial = new THREE.MeshPhongMaterial({
   color: 0xaaaaaa,
   side: THREE.DoubleSide,
   wireframe: true,
 });
 
+const textureMaterial = new THREE.MeshPhongMaterial({
+  map: clothTexture,
+  side: THREE.DoubleSide,
+});
+
+let clothMaterial = wireMaterial;
 const clothMesh = new THREE.Mesh(clothGeometry, clothMaterial);
 scene.add(clothMesh);
 
+let showTexture = false; // toggle state
+
+// ====================================================================
+// PHYSICS SETUP
+// ====================================================================
 const gravity = new THREE.Vector3(0, -9.8, 0);
 const timeStep = 1 / 60;
-
 const particles = [];
 const posAttr = clothGeometry.attributes.position.array;
 
@@ -136,63 +147,86 @@ function onMouseUp() {
 }
 
 // ====================================================================
+// TOGGLE WIREFRAME / TEXTURE
+// ====================================================================
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 't') {
+    showTexture = !showTexture;
+    clothMesh.material = showTexture ? textureMaterial : wireMaterial;
+  }
+});
+
+// ====================================================================
 // SIMULATION LOOP
 // ====================================================================
 function simulate() {
-  const damping = 0.98; // <-- velocity damping to prevent runaway energy
-
-  // A. Integrate motion
   for (const p of particles) {
     if (!p.invMass) continue;
-
-    // Semi-implicit integration
     p.velocity.add(gravity.clone().multiplyScalar(timeStep));
-    p.velocity.multiplyScalar(damping);
     p.prevPosition.copy(p.position);
     p.position.add(p.velocity.clone().multiplyScalar(timeStep));
   }
 
-  // B. Mouse drag (smooth spring)
-  if (selectedParticle) {
-    raycaster.setFromCamera(mouse, camera);
-    const targetPos = new THREE.Vector3();
-    const distance = camera.position.distanceTo(selectedParticle.position);
-    raycaster.ray.at(distance, targetPos);
+  // B. Mouse drag (stable and view-aligned)
+if (selectedParticle) {
+  raycaster.setFromCamera(mouse, camera);
+
+  // Create a plane perpendicular to the camera direction
+  const dragPlane = new THREE.Plane();
+  dragPlane.setFromNormalAndCoplanarPoint(
+    camera.getWorldDirection(new THREE.Vector3()).clone().negate(),
+    selectedParticle.position
+  );
+
+  const targetPos = new THREE.Vector3();
+  raycaster.ray.intersectPlane(dragPlane, targetPos);
+
+  if (targetPos) {
+    // Compute smooth drag toward target
+    const diff = new THREE.Vector3().subVectors(targetPos, selectedParticle.position);
+    const distanceDiff = diff.length();
 
     const dragStrength = 0.25;
-    const diff = new THREE.Vector3().subVectors(targetPos, selectedParticle.position);
+    const maxDragDistance = 3.0;
 
-    // Clamp how far the particle can be pulled (stability)
-    const maxDrag = restDistance * 3.0;
-    if (diff.length() > maxDrag) diff.setLength(maxDrag);
+    if (distanceDiff > maxDragDistance) {
+      diff.normalize().multiplyScalar(maxDragDistance);
+    }
 
     selectedParticle.position.add(diff.multiplyScalar(dragStrength));
+    selectedParticle.velocity.multiplyScalar(0.8);
   }
+}
 
-  // C. Constraint solver
-  for (let iter = 0; iter < 5; iter++) {
-    for (let j = constraints.length - 1; j >= 0; j--) {
-      const [p1, p2, restDist] = constraints[j];
-      const delta = new THREE.Vector3().subVectors(p2.position, p1.position);
-      const currentDist = delta.length();
 
-      if (currentDist > tearDistance) {
-        constraints.splice(j, 1);
-        continue;
-      }
+const solverIterations = 8; // more precise, less stretchy
+const stiffness = 0.4;     // moderate stiffness
 
-      const diff = (currentDist - restDist) / currentDist;
-      const correction = delta.multiplyScalar(0.5 * diff);
-      if (p1.invMass > 0) p1.position.add(correction);
-      if (p2.invMass > 0) p2.position.sub(correction);
+for (let iter = 0; iter < solverIterations; iter++) {
+  for (let j = constraints.length - 1; j >= 0; j--) {
+    const [p1, p2, restDist] = constraints[j];
+    const delta = new THREE.Vector3().subVectors(p2.position, p1.position);
+    const currentDist = delta.length();
+
+    if (currentDist > tearDistance) {
+      constraints.splice(j, 1);
+      continue;
     }
-  }
 
-  // D. Update mesh & velocity
+    const diff = (currentDist - restDist) / currentDist;
+    const correction = delta.multiplyScalar(stiffness * diff);
+    if (p1.invMass > 0) p1.position.add(correction);
+    if (p2.invMass > 0) p2.position.sub(correction);
+  }
+}
+
+
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
     if (p.invMass > 0)
       p.velocity.subVectors(p.position, p.prevPosition).divideScalar(timeStep);
+      p.velocity.multiplyScalar(0.97); // adds weight
+
     posAttr[i * 3] = p.position.x;
     posAttr[i * 3 + 1] = p.position.y;
     posAttr[i * 3 + 2] = p.position.z;
@@ -209,6 +243,7 @@ function animate() {
   requestAnimationFrame(animate);
   simulate();
   updateCamera();
+  controls.update();
   renderer.render(scene, camera);
 }
 animate();
