@@ -63,8 +63,9 @@ This project uses modern JavaScript modules. Due to browser security restriction
     Bash
 
     ```
-    git clone https://github.com/yourusername/jackfruit-problem.git
-    cd jackfruit-problem
+    git clone https://github.com/bhoomikahegde11/VAR-Project-Jackfruit
+    cd VAR-Project-Jackfruit
+
 
     ```
 
