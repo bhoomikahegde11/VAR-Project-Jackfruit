@@ -302,7 +302,6 @@ function performCut() {
   // ---------------------------------------------------------
   for (let i = 0; i < particles.length; i++) {
      const particle = particles[i];
-     // Quick check: is it near any segment?
      for (let j = 0; j < cutPath.length - 1; j++) {
         if (distanceToSegment(particle.position, cutPath[j], cutPath[j+1]) < cutRadius) {
             snapParticleToLine(i);
@@ -336,7 +335,7 @@ function performCut() {
     if (intersected || bothSnapped) {
       constraintsToCut.add(i);
       
-      // FORCE SNAP: If we cut this edge, we MUST snap its vertices 
+      // FORCE SNAP: If we cut this edge, we snap its vertices 
       // to ensure the cut looks smooth, even if they were far away.
       snapParticleToLine(constraint.p0);
       snapParticleToLine(constraint.p1);
@@ -385,7 +384,7 @@ function performCut() {
   }
 
   // ---------------------------------------------------------
-  // PHASE 4: REBUILD TOPOLOGY (Improved for Curves)
+  // PHASE 4: REBUILD TOPOLOGY 
   // ---------------------------------------------------------
   for (let i = 0; i < oldIndices.count; i += 3) {
     const i0 = oldIndices.getX(i);
@@ -398,7 +397,7 @@ function performCut() {
       .add(particles[i2].position)
       .multiplyScalar(1/3);
 
-    // --- NEW: Find the CLOSEST segment of the cut path to this triangle ---
+    // Find the closest segment of the cut path to this triangle 
     let bestSide = 0;
     let minDistance = Infinity;
 
@@ -413,7 +412,7 @@ function performCut() {
       if (dist < minDistance) {
         minDistance = dist;
         
-        // Check side relative to THIS segment only
+        // Check side relative to this segment only
         const segDir = new THREE.Vector3().subVectors(segEnd, segStart);
         const toCentroid = new THREE.Vector3().subVectors(centroid, segStart);
         const cross = new THREE.Vector3().crossVectors(segDir, toCentroid);
@@ -449,7 +448,7 @@ function performCut() {
   rebuildPhysicsConstraints();
 }
 
-// --- HELPER FUNCTIONS (Keep these here) ---
+// --- HELPER FUNCTIONS ---
 
 function getClosestPointOnSegment(point, segStart, segEnd) {
   const segDir = new THREE.Vector3().subVectors(segEnd, segStart);
@@ -492,7 +491,6 @@ function rebuildPhysicsConstraints() {
   }
   
   // Re-pin top row based on Y height (since indices changed)
-  // Assuming cloth height is centered, top is ~7.5
   const pinThreshold = (clothHeight / 2) - 1.0; 
   
   for(let p of particles) {
