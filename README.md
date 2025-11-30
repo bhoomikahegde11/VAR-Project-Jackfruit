@@ -3,6 +3,10 @@
 
 **A real-time physics simulation of deformable cloth with dynamic topology modification, built from scratch using Three.js and custom Position-Based Dynamics (PBD).**
 
+🎬 **Demo**
+
+
+
 📖 Overview
 -----------
 
@@ -13,11 +17,11 @@ Instead of relying on pre-built physics engines like Ammo.js or Cannon.js, this 
 🚀 Key Features
 ---------------
 
--   **Custom Physics Engine:** Built using **Position-Based Dynamics (PBD)** and **Verlet Integration** for high stability and performance.
+-   **Custom Physics Engine:** Built using **Position-Based Dynamics (PBD)** and uses a Verlet-like PBD solver (iterative positional constraints).
 
 -   **Dynamic Topology Modification:** The mesh is not just visually hidden; it is geometrically sliced in real-time. Vertices are duplicated and topology is rebuilt to create physical separation along the cut line.
 
--   **Realistic Fabric Behavior:** Implements **Shear Constraints** (diagonal springs) to simulate the structural integrity of woven fabric, preventing the "jelly-like" behavior common in simple mass-spring systems.
+-   **Realistic Fabric Behavior:** Uses the natural triangulation of PlaneGeometry, which provides partial shear stiffness.
 
 -   **Interactive Controls:** Full mouse interaction for dragging/pulling the cloth and a dedicated "Cutting Mode" for slicing.
 
@@ -43,7 +47,7 @@ The simulation runs on a custom PBD solver that iterates 8 times per frame. It u
 
 -   **Spacebar:** Toggle **Cutting Mode**.
 
-    -   *While in Cutting Mode:* **Right Click + Drag** to draw a cut line. Release to slice the mesh.
+    -   *While in Cutting Mode:* **Left Click + Drag** to draw a cut line. Release to slice the mesh.
 
 -   **T:** Toggle between **Texture** and **Wireframe** view (useful for debugging cuts).
 
